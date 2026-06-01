@@ -1,0 +1,27 @@
+# Credentials — never commit
+bidx_login.txt
+
+# Scraper output / archives
+bidx_results*.xlsx
+bidx_milling_*_archive.xlsx
+bidx_grinding_*_archive.xlsx
+*.xlsx.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+
+# Build artifacts
+build/
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
