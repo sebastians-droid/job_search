@@ -28,6 +28,9 @@ param scheduleCron string = '0 11 * * *'
 @description('Full resource ID of an existing Log Analytics workspace (Option C). Leave empty to create a new workspace in this resource group.')
 param existingLogAnalyticsWorkspaceId string = ''
 
+@description('Deploy the Container Apps Job. Set false for pass 1 (infra only); deploy.ps1 sets true on pass 2 after Key Vault secrets exist.')
+param deployScraperJob bool = true
+
 var useExistingLogAnalytics = !empty(existingLogAnalyticsWorkspaceId)
 var logWorkspaceName = '${prefix}-logs'
 var environmentName = '${prefix}-cae'
@@ -53,13 +56,9 @@ resource existingLogAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-
   name: existingLaWorkspaceName
 }
 
-var logAnalyticsCustomerId = useExistingLogAnalytics
-  ? existingLogAnalytics.properties.customerId
-  : newLogAnalytics.properties.customerId
+var logAnalyticsCustomerId = useExistingLogAnalytics ? existingLogAnalytics!.properties.customerId : newLogAnalytics!.properties.customerId
 
-var logAnalyticsSharedKey = useExistingLogAnalytics
-  ? existingLogAnalytics.listKeys().primarySharedKey
-  : newLogAnalytics.listKeys().primarySharedKey
+var logAnalyticsSharedKey = useExistingLogAnalytics ? existingLogAnalytics!.listKeys().primarySharedKey : newLogAnalytics!.listKeys().primarySharedKey
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
@@ -152,7 +151,7 @@ var jobTriggerConfig = enableSchedule
       }
     }
 
-resource scraperJob 'Microsoft.App/jobs@2024-03-01' = {
+resource scraperJob 'Microsoft.App/jobs@2024-03-01' = if (deployScraperJob) {
   name: jobName
   location: location
   identity: {
@@ -213,7 +212,7 @@ resource scraperJob 'Microsoft.App/jobs@2024-03-01' = {
 output acrLoginServer string = acr.properties.loginServer
 output keyVaultUri string = keyVault.properties.vaultUri
 output containerAppsEnvironmentId string = containerEnv.id
-output jobName string = scraperJob.name
-output jobResourceId string = scraperJob.id
+output jobName string = deployScraperJob ? scraperJob.name : ''
+output jobResourceId string = deployScraperJob ? scraperJob.id : ''
 output managedIdentityClientId string = jobIdentity.properties.clientId
 output resourceGroupName string = resourceGroup().name

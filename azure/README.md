@@ -44,7 +44,7 @@ Edit `parameters.json`:
 
 | Parameter | Rule |
 |---|---|
-| `acrName` | Globally unique, alphanumeric only, e.g. `bidxacrswank001` |
+| `acrName` | Globally unique, **lowercase letters and numbers only** (no `_` or `-`), 5–50 chars, e.g. `bidxacrswank2026` |
 | `keyVaultName` | Globally unique, e.g. `bidx-kv-swank001` |
 | `enableSchedule` | Keep `false` if Power Automate runs the job |
 | `containerImage` | Leave placeholder until first `az acr build` |
@@ -92,14 +92,14 @@ Secret names must match exactly: `BIDX-USERNAME`, `BIDX-PASSWORD`.
 ## 4. Test a manual run
 
 ```powershell
-az containerapp job start --name bidx-scraper-job --resource-group bidx-rg
-az containerapp job execution list --name bidx-scraper-job --resource-group bidx-rg -o table
+az containerapp job start --name bidx-scraper-job --resource-group swank-bidx
+az containerapp job execution list --name bidx-scraper-job --resource-group swank-bidx -o table
 ```
 
 View logs in Azure Portal → Container Apps → Jobs → Executions, or:
 
 ```powershell
-az containerapp job logs show --name bidx-scraper-job --resource-group bidx-rg
+az containerapp job logs show --name bidx-scraper-job --resource-group swank-bidx
 ```
 
 ---
@@ -107,7 +107,7 @@ az containerapp job logs show --name bidx-scraper-job --resource-group bidx-rg
 ## 5. Wire GitHub Actions
 
 ```powershell
-.\create-github-sp.ps1 -ResourceGroup bidx-rg -AcrName <yourAcrName>
+.\create-github-sp.ps1 -ResourceGroup swank-bidx -AcrName <yourAcrName>
 ```
 
 In GitHub → **Settings → Secrets and variables → Actions**:
@@ -136,7 +136,7 @@ Push to `main` — workflow `.github/workflows/build-push-acr.yml` rebuilds the 
 Start the job:
 
 ```
-POST https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.App/jobs/bidx-scraper-job/start?api-version=2024-03-01
+POST https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/swank-bidx/providers/Microsoft.App/jobs/bidx-scraper-job/start?api-version=2024-03-01
 ```
 
 Authentication: **Active Directory OAuth** (your account or a dedicated app with permission to start jobs on the resource group).

@@ -1,27 +1,43 @@
-# BIDX Step 2 — one-time Azure setup (run in PowerShell with Azure CLI logged in: az login)
+# BIDX Step 2 — Azure setup (two-pass deploy)
+#
+# Pass 1: ACR, Key Vault, Container Apps Environment (no job yet)
+# Pass 2: Placeholder secrets in Key Vault, then deploy the job
 #
 # Usage:
-#   cd azure
-#   Copy-Item parameters.example.json parameters.json
-#   # Edit parameters.json — set unique acrName and keyVaultName
 #   .\deploy.ps1 -ResourceGroup swank-bidx
-#
-# Option C: use your analytics subscription (az account set), new RG per tool,
-# reuse Log Analytics — set existingLogAnalyticsWorkspaceId in parameters.json.
 
 param(
     [Parameter(Mandatory = $true)]
     [string]$ResourceGroup,
 
     [string]$Location = "eastus",
-    [string]$ParametersFile = "parameters.json"
+    [string]$ParametersFile = "parameters.json",
+
+    [string]$BidxUsername = "",
+    [string]$BidxPassword = ""
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ParamsPath = Join-Path $ScriptDir $ParametersFile
 
-if (-not (Test-Path (Join-Path $ScriptDir $ParametersFile))) {
+if (-not (Test-Path $ParamsPath)) {
     Write-Error "Create $ParametersFile from parameters.example.json and set acrName + keyVaultName."
+}
+
+$params = Get-Content $ParamsPath | ConvertFrom-Json
+$acrName = $params.parameters.acrName.value
+$keyVaultName = $params.parameters.keyVaultName.value
+$prefix = $params.parameters.prefix.value
+$jobName = "$prefix-scraper-job"
+$repoRoot = Resolve-Path (Join-Path $ScriptDir "..")
+
+if ($acrName -notmatch '^[a-z0-9]{5,50}$') {
+    Write-Error @"
+acrName '$acrName' is invalid.
+ACR names must be 5-50 characters, lowercase letters and numbers ONLY (no underscores or hyphens).
+Example: bidxacrswank2026
+"@
 }
 
 $subscriptionName = az account show --query name -o tsv
@@ -29,15 +45,42 @@ Write-Host "Subscription: $subscriptionName"
 Write-Host "Creating resource group: $ResourceGroup ($Location)"
 az group create --name $ResourceGroup --location $Location | Out-Null
 
-Write-Host "Deploying Bicep..."
-az deployment group create `
-    --resource-group $ResourceGroup `
-    --template-file (Join-Path $ScriptDir "main.bicep") `
-    --parameters "@$(Join-Path $ScriptDir $ParametersFile)" `
-    --output table
+function Invoke-BidxDeployment {
+    param([bool]$DeployJob)
+    Write-Host ""
+    Write-Host "Deploying Bicep (deployScraperJob=$DeployJob)..."
+    az deployment group create `
+        --resource-group $ResourceGroup `
+        --template-file (Join-Path $ScriptDir "main.bicep") `
+        --parameters "@$ParamsPath" deployScraperJob=$DeployJob `
+        --output table
+}
 
-$acrName = (Get-Content (Join-Path $ScriptDir $ParametersFile) | ConvertFrom-Json).parameters.acrName.value
-$repoRoot = Resolve-Path (Join-Path $ScriptDir "..")
+# --- Pass 1: infrastructure only ---
+Invoke-BidxDeployment -DeployJob $false
+
+Write-Host ""
+Write-Host "Seeding Key Vault secrets (required before the job can be created)..."
+if ($BidxUsername -and $BidxPassword) {
+    $userValue = $BidxUsername
+    $passValue = $BidxPassword
+    Write-Host "Using BIDX credentials supplied to deploy.ps1."
+} else {
+    $userValue = "REPLACE-WITH-BIDX-EMAIL"
+    $passValue = "REPLACE-WITH-BIDX-PASSWORD"
+    Write-Host "No credentials passed — using placeholders. Update in Portal or rerun:"
+    Write-Host "  az keyvault secret set --vault-name $keyVaultName --name BIDX-USERNAME --value '<email>'"
+    Write-Host "  az keyvault secret set --vault-name $keyVaultName --name BIDX-PASSWORD --value '<password>'"
+}
+
+az keyvault secret set --vault-name $keyVaultName --name BIDX-USERNAME --value $userValue | Out-Null
+az keyvault secret set --vault-name $keyVaultName --name BIDX-PASSWORD --value $passValue | Out-Null
+
+Write-Host "Waiting 45s for Key Vault RBAC on the job identity to propagate..."
+Start-Sleep -Seconds 45
+
+# --- Pass 2: deploy the job ---
+Invoke-BidxDeployment -DeployJob $true
 
 Write-Host ""
 Write-Host "Building scraper image in ACR (cloud build — no local Docker)..."
@@ -48,8 +91,6 @@ az acr build `
     $repoRoot
 
 $acrLogin = az acr show --name $acrName --query loginServer -o tsv
-$prefix = (Get-Content (Join-Path $ScriptDir $ParametersFile) | ConvertFrom-Json).parameters.prefix.value
-$jobName = "$prefix-scraper-job"
 
 Write-Host "Updating job to use bidx-scraper:latest..."
 az containerapp job update `
@@ -58,14 +99,14 @@ az containerapp job update `
     --image "${acrLogin}/bidx-scraper:latest"
 
 Write-Host ""
-Write-Host "=== Next steps ==="
-Write-Host "1. Store credentials in Key Vault:"
-Write-Host "   az keyvault secret set --vault-name <keyVaultName> --name BIDX-USERNAME --value '<email>'"
-Write-Host "   az keyvault secret set --vault-name <keyVaultName> --name BIDX-PASSWORD --value '<password>'"
+Write-Host "=== Deploy complete ==="
+Write-Host "Resource group : $ResourceGroup"
+Write-Host "ACR            : $acrName"
+Write-Host "Key Vault      : $keyVaultName"
+Write-Host "Job            : $jobName"
 Write-Host ""
-Write-Host "2. Create GitHub Actions service principal and add secrets (see azure/README.md)"
-Write-Host ""
-Write-Host "3. Test run:"
-Write-Host "   az containerapp job start --name $jobName --resource-group $ResourceGroup"
-Write-Host ""
-Write-Host "4. Power Automate: daily 6am flow -> start job via Azure Resource Manager API"
+if (-not ($BidxUsername -and $BidxPassword)) {
+    Write-Host "IMPORTANT: Replace placeholder Key Vault secrets with real BIDX credentials before running the job."
+}
+Write-Host "Test run:"
+Write-Host "  az containerapp job start --name $jobName --resource-group $ResourceGroup"
