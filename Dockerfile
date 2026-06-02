@@ -1,4 +1,5 @@
-FROM python:3.12-slim-bookworm
+# MCR image avoids Docker Hub rate limits during ACR cloud builds
+FROM mcr.microsoft.com/devcontainers/python:3.12-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \

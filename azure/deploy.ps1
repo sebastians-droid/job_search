@@ -83,6 +83,17 @@ Start-Sleep -Seconds 45
 Invoke-BidxDeployment -DeployJob $true
 
 Write-Host ""
+Write-Host "Importing Python base image to ACR (Microsoft mirror, avoids Docker Hub limits)..."
+az acr import `
+    --name $acrName `
+    --source mcr.microsoft.com/devcontainers/python:3.12-bookworm `
+    --image python:3.12-bookworm `
+    --force 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Import skipped or failed — build will pull base image from MCR directly."
+}
+
+Write-Host ""
 Write-Host "Building scraper image in ACR (cloud build — no local Docker)..."
 az acr build `
     --registry $acrName `
