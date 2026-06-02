@@ -1,0 +1,12 @@
+.git
+.gitignore
+bidx_login.txt
+bidx_migration_plan.md
+*.xlsx.bak
+bidx_results*.xlsx
+bidx_*_archive.xlsx
+__pycache__
+.venv
+venv
+.env
+.env.*

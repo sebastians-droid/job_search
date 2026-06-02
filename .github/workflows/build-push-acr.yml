@@ -1,0 +1,44 @@
+# Build the BIDX scraper image in Azure Container Registry (no local Docker required).
+# After Azure infra exists, add these GitHub repository secrets:
+#   AZURE_CREDENTIALS  — JSON from: az ad sp create-for-rbac --sdk-auth
+#   AZURE_RESOURCE_GROUP
+#   ACR_NAME           — e.g. bidxacr12345 (must match deployed registry name)
+
+name: Build and push to ACR
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: bidx-scraper
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build image in ACR
+        run: |
+          az acr build \
+            --registry "${{ secrets.ACR_NAME }}" \
+            --image "${{ env.IMAGE_NAME }}:${{ github.sha }}" \
+            --image "${{ env.IMAGE_NAME }}:latest" \
+            .
+
+      # Set repository variable BIDX_DEPLOY_JOB=true after Azure infra is deployed
+      - name: Update Container Apps Job image
+        if: vars.BIDX_DEPLOY_JOB == 'true'
+        run: |
+          ACR_LOGIN=$(az acr show --name "${{ secrets.ACR_NAME }}" --query loginServer -o tsv)
+          az containerapp job update \
+            --name "${{ secrets.AZURE_CONTAINER_APP_JOB_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${ACR_LOGIN}/${{ env.IMAGE_NAME }}:${{ github.sha }}"

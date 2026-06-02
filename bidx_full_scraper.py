@@ -11,12 +11,6 @@ from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 import sys
 
-try:
-    import win32com.client
-    EXCEL_AVAILABLE = True
-except ImportError:
-    EXCEL_AVAILABLE = False
-
 # lxml is 3-5x faster than html.parser for BeautifulSoup; fall back gracefully
 try:
     import lxml  # noqa: F401
@@ -32,7 +26,7 @@ GRINDING_CONFIG      = "grinding_grooving_config.xlsx"
 MILLING_OUTPUT       = "bidx_results_milling.xlsx"
 GRINDING_OUTPUT      = "bidx_results_grinding_grooving.xlsx"
 RESTART_EVERY_N_DOTS = 8
-HEADLESS             = True   # Set False to watch the browser (useful for debugging)
+HEADLESS             = os.environ.get('BIDX_HEADLESS', 'true').lower() not in ('0', 'false', 'no')
 
 # Column definitions for each output type
 _MILLING_COLS  = ['letting_date', 'proposal_id', 'district', 'project_description',
@@ -46,9 +40,16 @@ _GRINDING_HDRS = ["Type"] + _MILLING_HDRS
 # ── CREDENTIALS ────────────────────────────────────────────────────────────────
 
 def load_credentials():
-    """Load login credentials from LOGIN_FILE (format: username|password)."""
+    """Load credentials from env vars (Azure Key Vault) or local login file."""
+    username = os.environ.get('BIDX_USERNAME', '').strip()
+    password = os.environ.get('BIDX_PASSWORD', '').strip()
+    if username and password:
+        return username, password
+
     if not os.path.exists(LOGIN_FILE):
-        print(f"ERROR: Login file '{LOGIN_FILE}' not found.")
+        print("ERROR: BIDX credentials not found.")
+        print("  Set BIDX_USERNAME and BIDX_PASSWORD environment variables,")
+        print(f"  or create '{LOGIN_FILE}' (format: username|password) for local dev.")
         sys.exit(1)
     try:
         with open(LOGIN_FILE) as f:
@@ -59,7 +60,7 @@ def load_credentials():
                 parts = line.split('|')
                 if len(parts) == 2:
                     return parts[0].strip(), parts[1].strip()
-        print("ERROR: No valid credentials found in login file.")
+        print(f"ERROR: No valid credentials found in '{LOGIN_FILE}'.")
         sys.exit(1)
     except Exception as e:
         print(f"ERROR reading login file: {e}")
@@ -211,6 +212,11 @@ def initialize_browser(username, password, is_restart=False):
         options.add_argument('--headless=new')
         options.add_argument('--disable-gpu')
         options.add_argument('--window-size=1920,1080')
+
+    chrome_bin = os.environ.get('CHROME_BIN', '').strip()
+    if chrome_bin:
+        options.binary_location = chrome_bin
+
     driver = webdriver.Chrome(options=options)
 
     if is_restart:
@@ -483,26 +489,7 @@ def write_sheet(results, output_file, sheet_name, col_order, headers):
 
 
 def autofit_all_sheets(filename, sheet_names):
-    """Auto-fit column widths for all named sheets — native Excel first, manual fallback."""
-    if EXCEL_AVAILABLE:
-        try:
-            abs_path = os.path.abspath(filename)
-            excel = win32com.client.Dispatch("Excel.Application")
-            excel.Visible = False
-            excel.DisplayAlerts = False
-            wb = excel.Workbooks.Open(abs_path)
-            for sn in sheet_names:
-                try:
-                    wb.Worksheets(sn).Cells.EntireColumn.AutoFit()
-                except:
-                    pass
-            wb.Save()
-            wb.Close()
-            excel.Quit()
-            return
-        except Exception as e:
-            print(f"Warning: Excel autofit failed: {e}")
-
+    """Auto-fit column widths for all named sheets using openpyxl."""
     try:
         wb = load_workbook(filename)
         for sn in sheet_names:

@@ -20,6 +20,9 @@ venv/
 build/
 dist/
 
+# Azure local deploy params (may contain your naming choices)
+azure/parameters.json
+
 # OS / editor
 .DS_Store
 Thumbs.db
