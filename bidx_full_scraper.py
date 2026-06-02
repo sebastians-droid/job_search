@@ -790,6 +790,18 @@ def main():
     print(f"Grinding rows : {total_grinding} → {GRINDING_OUTPUT}")
     print("=" * 80 + "\n")
 
+    # ── SharePoint (optional — set SHAREPOINT_ENABLED=true after Graph consent) ─
+    try:
+        from sharepoint_config import sharepoint_enabled
+        if sharepoint_enabled():
+            from sharepoint_publish import publish_to_sharepoint
+            dot_names = [d['name'] for d in dots]
+            publish_to_sharepoint(MILLING_OUTPUT, GRINDING_OUTPUT, dot_names)
+        else:
+            print("SharePoint publish skipped (SHAREPOINT_ENABLED is not true).")
+    except Exception as e:
+        print(f"WARNING: SharePoint publish failed: {e}")
+
 
 if __name__ == "__main__":
     try:
