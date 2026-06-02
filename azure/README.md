@@ -15,6 +15,24 @@ Power Automate triggers the job at 6am (manual trigger mode — no built-in cron
 
 ---
 
+## Recommended layout (Option C)
+
+Use your **analytics subscription** for everything, but **one resource group per tool**:
+
+| Resource group | What lives there |
+|---|---|
+| `swank-functions` | Existing Functions, storage, shared Log Analytics |
+| `swank-bidx` | BIDX only: ACR, Key Vault, Container Apps Job |
+
+BIDX logs go to your **existing** Log Analytics workspace (same as analytics), not a new one.
+
+Before deploy, set the correct subscription in Cloud Shell:
+
+```powershell
+az account list -o table
+az account set --subscription "Your Analytics Subscription Name"
+```
+
 ## 1. Configure names
 
 ```powershell
@@ -30,15 +48,22 @@ Edit `parameters.json`:
 | `keyVaultName` | Globally unique, e.g. `bidx-kv-swank001` |
 | `enableSchedule` | Keep `false` if Power Automate runs the job |
 | `containerImage` | Leave placeholder until first `az acr build` |
+| `existingLogAnalyticsWorkspaceId` | Full resource ID from Portal (see below) |
 
-Pick a resource group name, e.g. `bidx-rg`.
+Pick a **new** resource group name for BIDX only, e.g. `swank-bidx`.
+
+### Find your Log Analytics workspace resource ID
+
+Portal → **Log Analytics workspaces** → open the workspace in `swank-functions` → **Properties** → copy **Resource ID**. Paste into `parameters.json` (one line, starts with `/subscriptions/...`).
+
+To leave empty and create a dedicated BIDX workspace instead, set the value to `""`.
 
 ---
 
 ## 2. Deploy Azure resources
 
 ```powershell
-.\deploy.ps1 -ResourceGroup bidx-rg
+.\deploy.ps1 -ResourceGroup swank-bidx
 ```
 
 This creates:
@@ -91,7 +116,7 @@ In GitHub → **Settings → Secrets and variables → Actions**:
 |---|---|
 | `AZURE_CREDENTIALS` | Full JSON from the script |
 | `ACR_NAME` | Your registry name |
-| `AZURE_RESOURCE_GROUP` | e.g. `bidx-rg` |
+| `AZURE_RESOURCE_GROUP` | e.g. `swank-bidx` |
 | `AZURE_CONTAINER_APP_JOB_NAME` | `bidx-scraper-job` |
 
 | Variable | Value |

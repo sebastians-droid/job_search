@@ -4,7 +4,10 @@
 #   cd azure
 #   Copy-Item parameters.example.json parameters.json
 #   # Edit parameters.json — set unique acrName and keyVaultName
-#   .\deploy.ps1 -ResourceGroup bidx-rg
+#   .\deploy.ps1 -ResourceGroup swank-bidx
+#
+# Option C: use your analytics subscription (az account set), new RG per tool,
+# reuse Log Analytics — set existingLogAnalyticsWorkspaceId in parameters.json.
 
 param(
     [Parameter(Mandatory = $true)]
@@ -21,6 +24,8 @@ if (-not (Test-Path (Join-Path $ScriptDir $ParametersFile))) {
     Write-Error "Create $ParametersFile from parameters.example.json and set acrName + keyVaultName."
 }
 
+$subscriptionName = az account show --query name -o tsv
+Write-Host "Subscription: $subscriptionName"
 Write-Host "Creating resource group: $ResourceGroup ($Location)"
 az group create --name $ResourceGroup --location $Location | Out-Null
 

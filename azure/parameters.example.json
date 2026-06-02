@@ -19,6 +19,9 @@
     },
     "enableSchedule": {
       "value": false
+    },
+    "existingLogAnalyticsWorkspaceId": {
+      "value": "PASTE_FULL_RESOURCE_ID_FROM_PORTAL_OR_LEAVE_EMPTY"
     }
   }
 }

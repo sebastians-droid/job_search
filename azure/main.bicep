@@ -25,12 +25,19 @@ param enableSchedule bool = false
 @description('Cron in UTC — 0 11 * * * = 6am EST; ignored when enableSchedule is false')
 param scheduleCron string = '0 11 * * *'
 
+@description('Full resource ID of an existing Log Analytics workspace (Option C). Leave empty to create a new workspace in this resource group.')
+param existingLogAnalyticsWorkspaceId string = ''
+
+var useExistingLogAnalytics = !empty(existingLogAnalyticsWorkspaceId)
 var logWorkspaceName = '${prefix}-logs'
 var environmentName = '${prefix}-cae'
 var jobName = '${prefix}-scraper-job'
 var identityName = '${prefix}-job-identity'
+var existingLaParts = split(existingLogAnalyticsWorkspaceId, '/')
+var existingLaResourceGroupName = useExistingLogAnalytics ? existingLaParts[4] : ''
+var existingLaWorkspaceName = useExistingLogAnalytics ? existingLaParts[8] : ''
 
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+resource newLogAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = if (!useExistingLogAnalytics) {
   name: logWorkspaceName
   location: location
   properties: {
@@ -40,6 +47,19 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
     retentionInDays: 30
   }
 }
+
+resource existingLogAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = if (useExistingLogAnalytics) {
+  scope: resourceGroup(subscription().subscriptionId, existingLaResourceGroupName)
+  name: existingLaWorkspaceName
+}
+
+var logAnalyticsCustomerId = useExistingLogAnalytics
+  ? existingLogAnalytics.properties.customerId
+  : newLogAnalytics.properties.customerId
+
+var logAnalyticsSharedKey = useExistingLogAnalytics
+  ? existingLogAnalytics.listKeys().primarySharedKey
+  : newLogAnalytics.listKeys().primarySharedKey
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
@@ -104,8 +124,8 @@ resource containerEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
-        customerId: logAnalytics.properties.customerId
-        sharedKey: logAnalytics.listKeys().primarySharedKey
+        customerId: logAnalyticsCustomerId
+        sharedKey: logAnalyticsSharedKey
       }
     }
   }
