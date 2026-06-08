@@ -28,7 +28,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY bidx_full_scraper.py sharepoint_config.py graph_client.py sharepoint_publish.py ./
+COPY bidx_full_scraper.py sharepoint_config.py graph_client.py sharepoint_publish.py blob_publish.py ./
 COPY milling_config.xlsx grinding_grooving_config.xlsx ./
 
 CMD ["python", "bidx_full_scraper.py"]
