@@ -790,17 +790,15 @@ def main():
     print(f"Grinding rows : {total_grinding} → {GRINDING_OUTPUT}")
     print("=" * 80 + "\n")
 
-    # ── SharePoint (optional — set SHAREPOINT_ENABLED=true after Graph consent) ─
+    # ── Azure Blob Storage (set BLOB_ENABLED=true; Power Automate copies to SharePoint) ─
     try:
-        from sharepoint_config import sharepoint_enabled
-        if sharepoint_enabled():
-            from sharepoint_publish import publish_to_sharepoint
-            dot_names = [d['name'] for d in dots]
-            publish_to_sharepoint(MILLING_OUTPUT, GRINDING_OUTPUT, dot_names)
+        from blob_publish import blob_enabled, publish_to_blob
+        if blob_enabled():
+            publish_to_blob(MILLING_OUTPUT, GRINDING_OUTPUT)
         else:
-            print("SharePoint publish skipped (SHAREPOINT_ENABLED is not true).")
+            print("Blob publish skipped (BLOB_ENABLED is not true).")
     except Exception as e:
-        print(f"WARNING: SharePoint publish failed: {e}")
+        print(f"WARNING: Blob publish failed: {e}")
 
 
 if __name__ == "__main__":
